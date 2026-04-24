@@ -1,0 +1,28 @@
+{
+  "$schema": "https://developer.microsoft.com/fabric/schemas/warehouse/1.0",
+  "type": "Warehouse",
+  "displayName": "contoso_analytics_warehouse",
+  "description": "Gold layer data warehouse for Contoso analytics. Serves Power BI DirectLake and SQL client connections.",
+  "workspaceId": "00000000-0000-0000-0000-000000000001",
+  "itemId": "00000000-0000-0000-0000-000000000003",
+  "connectionString": "SERVER_PLACEHOLDER.datawarehouse.fabric.microsoft.com",
+  "defaultSchema": "dbo",
+  "collation": "Latin1_General_100_CI_AS_KS_WS_SC_UTF8",
+  "statistics": {
+    "autoCreateStatistics": true,
+    "autoUpdateStatistics": true
+  },
+  "rowLevelSecurity": {
+    "enabled": true,
+    "policyFile": "fabric/warehouse/rls/rls_policies.sql"
+  },
+  "createdBy": "data-engineering@contoso.example",
+  "createdDate": "2023-09-01T00:00:00Z",
+  "schemas": [
+    { "name": "dbo",  "description": "Default schema — staging and temp objects" },
+    { "name": "fact", "description": "Fact tables" },
+    { "name": "dim",  "description": "Dimension tables" },
+    { "name": "agg",  "description": "Pre-aggregated summary tables" },
+    { "name": "rpt",  "description": "Reporting views (Power BI facing)" }
+  ]
+}

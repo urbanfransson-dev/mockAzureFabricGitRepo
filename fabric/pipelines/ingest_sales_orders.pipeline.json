@@ -1,0 +1,164 @@
+{
+  "$schema": "https://developer.microsoft.com/fabric/schemas/pipeline/1.0",
+  "name": "ingest_sales_orders",
+  "description": "Ingests sales order data from Azure SQL Database (ERP) into the Bronze lakehouse layer. Uses watermark-based incremental loading.",
+  "type": "MicrosoftFabricPipeline",
+  "version": "2.0",
+  "properties": {
+    "tags": {
+      "layer": "bronze",
+      "domain": "sales",
+      "team": "data-engineering",
+      "criticality": "high"
+    }
+  },
+  "parameters": {
+    "watermark_start": {
+      "type": "string",
+      "defaultValue": "1900-01-01 00:00:00",
+      "description": "Lower bound watermark (inclusive). Overridden at runtime if prior run logged a watermark."
+    },
+    "watermark_end": {
+      "type": "string",
+      "defaultValue": "@utcNow()",
+      "description": "Upper bound watermark (exclusive). Defaults to pipeline trigger time."
+    },
+    "batch_size": {
+      "type": "int",
+      "defaultValue": 50000,
+      "description": "Number of rows per batch."
+    },
+    "target_lakehouse": {
+      "type": "string",
+      "defaultValue": "contoso_analytics_lakehouse",
+      "description": "Target Fabric lakehouse name."
+    }
+  },
+  "variables": {
+    "rows_read":    { "type": "Integer", "defaultValue": 0 },
+    "rows_written": { "type": "Integer", "defaultValue": 0 },
+    "run_id":       { "type": "String",  "defaultValue": "" }
+  },
+  "activities": [
+    {
+      "name": "GetWatermark",
+      "type": "Lookup",
+      "description": "Fetch the last successful watermark from the control table.",
+      "dependsOn": [],
+      "typeProperties": {
+        "source": {
+          "type": "AzureSqlSource",
+          "sqlReaderQuery": "SELECT MAX(last_watermark) AS watermark FROM dbo.pipeline_control WHERE pipeline_name = 'ingest_sales_orders' AND status = 'SUCCESS'"
+        },
+        "linkedServiceName": { "referenceName": "ls_azure_sql_erp", "type": "LinkedServiceReference" },
+        "firstRowOnly": true
+      }
+    },
+    {
+      "name": "SetRunId",
+      "type": "SetVariable",
+      "dependsOn": [{ "activity": "GetWatermark", "dependencyConditions": ["Succeeded"] }],
+      "typeProperties": {
+        "variableName": "run_id",
+        "value": "@concat('RUN-', formatDateTime(utcNow(), 'yyyyMMdd-HHmmss'))"
+      }
+    },
+    {
+      "name": "CopySalesOrders",
+      "type": "Copy",
+      "description": "Incremental copy from ERP SQL source to Bronze Delta table.",
+      "dependsOn": [{ "activity": "SetRunId", "dependencyConditions": ["Succeeded"] }],
+      "typeProperties": {
+        "source": {
+          "type": "AzureSqlSource",
+          "sqlReaderQuery": "@concat('SELECT *, GETUTCDATE() AS _ingestion_ts, ''', variables('run_id'), ''' AS _source_file, 0 AS _is_deleted FROM dbo.SalesOrders WHERE AEDAT > ''', activity('GetWatermark').output.firstRow.watermark, ''' AND AEDAT <= ''', pipeline().parameters.watermark_end, '''')",
+          "queryTimeout": "02:00:00",
+          "partitionOption": "None"
+        },
+        "sink": {
+          "type": "LakehouseTableSink",
+          "tableActionOption": "Append",
+          "partitionOption": "DynamicRange",
+          "partitionSettings": {
+            "partitionColumnName": "ingestion_date",
+            "partitionUpperBound": "@pipeline().parameters.watermark_end",
+            "partitionLowerBound": "@activity('GetWatermark').output.firstRow.watermark"
+          }
+        },
+        "translator": {
+          "type": "TabularTranslator",
+          "typeConversion": true,
+          "typeConversionSettings": { "allowDataTruncation": false, "treatBooleanAsNumber": false }
+        },
+        "parallelCopies": 4,
+        "dataIntegrationUnits": 8
+      },
+      "inputs": [
+        { "referenceName": "ds_azure_sql_sales_orders", "type": "DatasetReference" }
+      ],
+      "outputs": [
+        { "referenceName": "ds_lakehouse_bronze_sales_orders", "type": "DatasetReference" }
+      ]
+    },
+    {
+      "name": "RunDataQualityCheck",
+      "type": "SynapseNotebook",
+      "description": "Run Great Expectations data quality suite on the ingested batch.",
+      "dependsOn": [{ "activity": "CopySalesOrders", "dependencyConditions": ["Succeeded"] }],
+      "typeProperties": {
+        "notebook": { "referenceName": "nb_dq_bronze_sales_orders", "type": "NotebookReference" },
+        "parameters": {
+          "run_id":       { "value": "@variables('run_id')",     "type": "string" },
+          "target_table": { "value": "bronze.sales_orders_raw",  "type": "string" }
+        },
+        "sparkPool": { "referenceName": "contoso-spark-pool-medium", "type": "BigDataPoolReference" }
+      }
+    },
+    {
+      "name": "UpdateWatermark",
+      "type": "SqlServerStoredProcedure",
+      "description": "Write the new watermark to the control table on success.",
+      "dependsOn": [{ "activity": "RunDataQualityCheck", "dependencyConditions": ["Succeeded"] }],
+      "typeProperties": {
+        "storedProcedureName": "dbo.usp_update_pipeline_control",
+        "storedProcedureParameters": {
+          "pipeline_name": { "value": "ingest_sales_orders",                         "type": "String" },
+          "new_watermark":  { "value": "@pipeline().parameters.watermark_end",        "type": "String" },
+          "rows_processed": { "value": "@activity('CopySalesOrders').output.rowsCopied", "type": "Int32" },
+          "run_id":         { "value": "@variables('run_id')",                        "type": "String" },
+          "status":         { "value": "SUCCESS",                                     "type": "String" }
+        },
+        "linkedServiceName": { "referenceName": "ls_azure_sql_control_db", "type": "LinkedServiceReference" }
+      }
+    },
+    {
+      "name": "LogFailure",
+      "type": "SqlServerStoredProcedure",
+      "description": "Record failure details in the control table.",
+      "dependsOn": [
+        { "activity": "CopySalesOrders",      "dependencyConditions": ["Failed"] },
+        { "activity": "RunDataQualityCheck",  "dependencyConditions": ["Failed"] }
+      ],
+      "typeProperties": {
+        "storedProcedureName": "dbo.usp_update_pipeline_control",
+        "storedProcedureParameters": {
+          "pipeline_name": { "value": "ingest_sales_orders", "type": "String" },
+          "new_watermark":  { "value": "@activity('GetWatermark').output.firstRow.watermark", "type": "String" },
+          "rows_processed": { "value": "0",                  "type": "Int32" },
+          "run_id":         { "value": "@variables('run_id')","type": "String" },
+          "status":         { "value": "FAILED",             "type": "String" }
+        },
+        "linkedServiceName": { "referenceName": "ls_azure_sql_control_db", "type": "LinkedServiceReference" }
+      }
+    }
+  ],
+  "schedule": {
+    "type": "ScheduleTrigger",
+    "recurrence": {
+      "frequency": "Hour",
+      "interval": 4,
+      "startTime": "2024-01-01T02:00:00Z",
+      "timeZone": "UTC"
+    }
+  }
+}

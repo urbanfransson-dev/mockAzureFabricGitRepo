@@ -1,0 +1,145 @@
+name: Deploy — Production
+
+on:
+  push:
+    branches: [ "release/**" ]
+  workflow_dispatch:
+    inputs:
+      confirm_prod:
+        description: 'Type DEPLOY to confirm production deployment'
+        required: true
+
+env:
+  ENVIRONMENT:    prod
+  RESOURCE_GROUP: rg-contoso-fabric-prod
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  gate-check:
+    name: Production Gate Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify manual confirmation (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event.inputs.confirm_prod }}" != "DEPLOY" ]]; then
+            echo "ERROR: Production deployment not confirmed. Input 'DEPLOY' to proceed."
+            exit 1
+          fi
+          echo "Production deployment confirmed."
+
+  deploy-prod-infra:
+    name: Deploy Infrastructure (Prod)
+    runs-on: ubuntu-latest
+    needs: gate-check
+    environment: production  # requires manual approval in GitHub Environments
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if analysis
+        run: |
+          az deployment group what-if \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --template-file infra/bicep/main.bicep \
+            --parameters infra/bicep/parameters/prod.parameters.json
+
+      - name: Deploy Bicep (Prod)
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ env.RESOURCE_GROUP }}
+          template:          infra/bicep/main.bicep
+          parameters:        infra/bicep/parameters/prod.parameters.json
+          deploymentName:    deploy-prod-${{ github.run_id }}
+          failOnStdErr:      true
+
+  deploy-prod-sql:
+    name: Deploy SQL (Prod)
+    runs-on: ubuntu-latest
+    needs: deploy-prod-infra
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install sqlcmd
+        run: |
+          sudo apt-get update && sudo apt-get install -y mssql-tools18
+
+      - name: Run DDL migrations (Prod)
+        env:
+          SQL_SERVER: ${{ secrets.PROD_SQL_SERVER }}
+          SQL_DB:     ${{ secrets.PROD_SQL_DATABASE }}
+        run: |
+          TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
+          for script in sql/ddl/*.sql sql/views/*.sql sql/procedures/*.sql; do
+            echo "Executing $script..."
+            /opt/mssql-tools18/bin/sqlcmd \
+              -S "$SQL_SERVER" -d "$SQL_DB" \
+              -G -P "$TOKEN" -i "$script" -b
+          done
+
+  deploy-prod-fabric:
+    name: Deploy Fabric Items (Prod)
+    runs-on: ubuntu-latest
+    needs: deploy-prod-sql
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -e ".[deploy]"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy pipelines & notebooks to Prod
+        env:
+          FABRIC_WORKSPACE_ID: ${{ secrets.PROD_FABRIC_WORKSPACE_ID }}
+          AZURE_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          python scripts/deploy_fabric_items.py \
+            --workspace-id "$FABRIC_WORKSPACE_ID" \
+            --environment prod \
+            --items-dir fabric/
+
+      - name: Create deployment tag
+        run: |
+          git tag "prod-${{ github.run_id }}" ${{ github.sha }}
+          git push origin "prod-${{ github.run_id }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

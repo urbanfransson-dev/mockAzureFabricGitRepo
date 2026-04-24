@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developer.microsoft.com/fabric/schemas/table/1.0",
+  "layer": "bronze",
+  "table_name": "sales_orders_raw",
+  "schema": "bronze",
+  "description": "Raw sales order data ingested from Azure SQL Database (ERP source). Append-only. No transformations applied.",
+  "source_system": "SAP-S4HANA-ERP",
+  "source_table": "VBAK",
+  "ingestion_pattern": "full_load_with_watermark",
+  "watermark_column": "AEDAT",
+  "partition_by": ["ingestion_date"],
+  "delta_properties": {
+    "delta.autoOptimize.optimizeWrite": "true",
+    "delta.autoOptimize.autoCompact": "true",
+    "delta.columnMapping.mode": "name",
+    "delta.enableChangeDataFeed": "false"
+  },
+  "columns": [
+    { "name": "order_id",        "type": "STRING",    "nullable": false, "description": "Source ERP order number (VBELN)" },
+    { "name": "order_date",      "type": "DATE",      "nullable": true,  "description": "Order creation date (AUDAT)" },
+    { "name": "customer_id",     "type": "STRING",    "nullable": true,  "description": "Customer account number (KUNNR)" },
+    { "name": "product_id",      "type": "STRING",    "nullable": true,  "description": "Material number (MATNR)" },
+    { "name": "quantity",        "type": "DECIMAL(18,4)", "nullable": true, "description": "Order quantity (KWMENG)" },
+    { "name": "unit_price",      "type": "DECIMAL(18,4)", "nullable": true, "description": "Net price per unit (NETPR)" },
+    { "name": "total_amount",    "type": "DECIMAL(18,4)", "nullable": true, "description": "Net order value (NETWR)" },
+    { "name": "currency",        "type": "STRING",    "nullable": true,  "description": "Document currency (WAERK)" },
+    { "name": "status",          "type": "STRING",    "nullable": true,  "description": "Overall delivery status (LFGSK)" },
+    { "name": "region",          "type": "STRING",    "nullable": true,  "description": "Sales organisation region" },
+    { "name": "_ingestion_ts",   "type": "TIMESTAMP", "nullable": false, "description": "UTC timestamp when row was ingested" },
+    { "name": "_source_file",    "type": "STRING",    "nullable": true,  "description": "Source file or batch ID" },
+    { "name": "_is_deleted",     "type": "BOOLEAN",   "nullable": false, "description": "Soft-delete flag from CDC" },
+    { "name": "ingestion_date",  "type": "DATE",      "nullable": false, "description": "Partition key — date of ingestion run" }
+  ],
+  "primary_key": ["order_id", "ingestion_date"],
+  "data_quality": {
+    "not_null_columns": ["order_id", "ingestion_date"],
+    "unique_columns": [],
+    "value_checks": [
+      { "column": "quantity",     "check": "quantity > 0" },
+      { "column": "total_amount", "check": "total_amount >= 0" }
+    ]
+  },
+  "tags": ["bronze", "sales", "erp", "sap"]
+}

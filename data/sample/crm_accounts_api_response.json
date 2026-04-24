@@ -1,0 +1,56 @@
+{
+  "api_version": "v58.0",
+  "query": "SELECT Id, Name, Type, Industry, BillingCountry, AnnualRevenue, NumberOfEmployees, OwnerId, LastModifiedDate FROM Account WHERE LastModifiedDate > LAST_N_DAYS:7",
+  "total_size": 4,
+  "done": true,
+  "records": [
+    {
+      "attributes": { "type": "Account", "url": "/services/data/v58.0/sobjects/Account/001XXXXXXXXXXXXXXX" },
+      "Id": "001XXXXXXXXXXXXXXX",
+      "Name": "Northwind Traders Inc",
+      "Type": "Customer - Direct",
+      "Industry": "Transportation",
+      "BillingCountry": "US",
+      "AnnualRevenue": 42000000.00,
+      "NumberOfEmployees": 320,
+      "OwnerId": "005XXXXXXXXXXXXXXX",
+      "LastModifiedDate": "2024-01-22T14:32:10.000+0000"
+    },
+    {
+      "attributes": { "type": "Account", "url": "/services/data/v58.0/sobjects/Account/001YYYYYYYYYYYYYYY" },
+      "Id": "001YYYYYYYYYYYYYYY",
+      "Name": "Fabrikam Solutions Ltd",
+      "Type": "Customer - Channel",
+      "Industry": "Technology",
+      "BillingCountry": "GB",
+      "AnnualRevenue": 89000000.00,
+      "NumberOfEmployees": 750,
+      "OwnerId": "005YYYYYYYYYYYYYYY",
+      "LastModifiedDate": "2024-01-23T09:11:45.000+0000"
+    },
+    {
+      "attributes": { "type": "Account", "url": "/services/data/v58.0/sobjects/Account/001ZZZZZZZZZZZZZZZ" },
+      "Id": "001ZZZZZZZZZZZZZZZ",
+      "Name": "Contoso Retail GmbH",
+      "Type": "Customer - Direct",
+      "Industry": "Retail",
+      "BillingCountry": "DE",
+      "AnnualRevenue": 210000000.00,
+      "NumberOfEmployees": 1800,
+      "OwnerId": "005ZZZZZZZZZZZZZZZ",
+      "LastModifiedDate": "2024-01-24T06:55:30.000+0000"
+    },
+    {
+      "attributes": { "type": "Account", "url": "/services/data/v58.0/sobjects/Account/001AAAAAAAAAAAAAAA" },
+      "Id": "001AAAAAAAAAAAAAAA",
+      "Name": "Alpine Data AG",
+      "Type": "Customer - Direct",
+      "Industry": "Financial Services",
+      "BillingCountry": "CH",
+      "AnnualRevenue": 15500000.00,
+      "NumberOfEmployees": 95,
+      "OwnerId": "005ZZZZZZZZZZZZZZZ",
+      "LastModifiedDate": "2024-01-24T11:20:00.000+0000"
+    }
+  ]
+}

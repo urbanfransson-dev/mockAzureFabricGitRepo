@@ -1,0 +1,11 @@
+customer_id,customer_name,account_type,industry,country,city,region,email,phone,account_manager_id,credit_limit,currency,is_active,created_date,last_modified_date
+CUST-0122,Tailspin Toys Corp,Enterprise,Retail,USA,Seattle,AMER,accounts@tailspintoys.example,+1-206-555-0142,REP-044,500000,USD,true,2019-03-15,2024-01-10
+CUST-0891,Northwind Traders Inc,Enterprise,Distribution,USA,Chicago,AMER,billing@northwindtraders.example,+1-312-555-0198,REP-033,750000,USD,true,2018-07-22,2024-01-05
+CUST-1042,Contoso Retail GmbH,Enterprise,Retail,Germany,Munich,EMEA,finance@contoso-retail.example,+49-89-555-0171,REP-021,1000000,EUR,true,2017-11-01,2024-01-16
+CUST-2213,Fabrikam Solutions Ltd,Enterprise,Technology,UK,London,EMEA,procurement@fabrikam.example,+44-20-7946-0922,REP-015,850000,GBP,true,2018-02-14,2024-01-10
+CUST-3301,Alpine Data AG,SMB,Financial Services,Switzerland,Zurich,EMEA,orders@alpinedata.example,+41-44-555-0133,REP-021,200000,EUR,true,2021-06-30,2023-12-01
+CUST-5502,WingTip Bikes BV,SMB,Manufacturing,Netherlands,Amsterdam,EMEA,accounting@wingtipbikes.example,+31-20-555-0162,REP-029,300000,EUR,true,2020-09-12,2024-01-13
+CUST-6611,Pacific Rim Logistics,Enterprise,Logistics,Japan,Tokyo,APAC,ap@pacificrimlogistics.example,+81-3-5555-0100,REP-052,600000,USD,true,2019-04-18,2024-01-15
+CUST-7730,Adatum Corporation,Enterprise,Healthcare,USA,Boston,AMER,finance@adatum.example,+1-617-555-0187,REP-038,1200000,USD,true,2016-08-09,2024-01-17
+CUST-8841,Datum Corp Asia,Enterprise,Technology,Singapore,Singapore,APAC,billing@datumcorp.example,+65-6555-0122,REP-052,400000,USD,true,2022-01-05,2024-01-14
+CUST-9910,Proseware Inc,SMB,Consulting,Canada,Toronto,AMER,ap@proseware.example,+1-416-555-0155,REP-044,150000,CAD,false,2020-11-30,2023-06-15

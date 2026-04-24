@@ -1,0 +1,16 @@
+order_id,order_date,customer_id,customer_name,product_id,product_name,category,quantity,unit_price,total_amount,currency,status,region,sales_rep_id,sales_rep_name
+ORD-2024-00001,2024-01-03,CUST-1042,Contoso Retail GmbH,PROD-5521,Industrial Sensor X200,Hardware,10,249.99,2499.90,EUR,Completed,EMEA,REP-021,Anna Lindström
+ORD-2024-00002,2024-01-04,CUST-2213,Fabrikam Solutions Ltd,PROD-3310,Cloud Gateway Pro,Software,5,1200.00,6000.00,GBP,Completed,EMEA,REP-015,James O'Brien
+ORD-2024-00003,2024-01-05,CUST-0891,Northwind Traders Inc,PROD-7712,Analytics Dashboard License,Software,25,89.00,2225.00,USD,Completed,AMER,REP-033,Maria Garcia
+ORD-2024-00004,2024-01-08,CUST-3301,Alpine Data AG,PROD-5521,Industrial Sensor X200,Hardware,4,249.99,999.96,EUR,Completed,EMEA,REP-021,Anna Lindström
+ORD-2024-00005,2024-01-09,CUST-0122,Tailspin Toys Corp,PROD-1100,Edge Computing Module,Hardware,2,3500.00,7000.00,USD,Cancelled,AMER,REP-044,Robert Kim
+ORD-2024-00006,2024-01-10,CUST-2213,Fabrikam Solutions Ltd,PROD-8801,Premium Support Package,Service,1,15000.00,15000.00,GBP,Completed,EMEA,REP-015,James O'Brien
+ORD-2024-00007,2024-01-11,CUST-5502,WingTip Bikes BV,PROD-3310,Cloud Gateway Pro,Software,12,1200.00,14400.00,EUR,Pending,EMEA,REP-029,Lars van der Berg
+ORD-2024-00008,2024-01-12,CUST-0891,Northwind Traders Inc,PROD-9901,Data Integration Suite,Software,3,4500.00,13500.00,USD,Completed,AMER,REP-033,Maria Garcia
+ORD-2024-00009,2024-01-15,CUST-6611,Pacific Rim Logistics,PROD-1100,Edge Computing Module,Hardware,1,3500.00,3500.00,USD,Completed,APAC,REP-052,Yuki Tanaka
+ORD-2024-00010,2024-01-16,CUST-1042,Contoso Retail GmbH,PROD-9901,Data Integration Suite,Software,2,4500.00,9000.00,EUR,Completed,EMEA,REP-021,Anna Lindström
+ORD-2024-00011,2024-01-17,CUST-7730,Adatum Corporation,PROD-7712,Analytics Dashboard License,Software,50,89.00,4450.00,USD,Completed,AMER,REP-038,Chris Washington
+ORD-2024-00012,2024-01-18,CUST-3301,Alpine Data AG,PROD-8801,Premium Support Package,Service,1,15000.00,15000.00,EUR,Completed,EMEA,REP-021,Anna Lindström
+ORD-2024-00013,2024-01-19,CUST-5502,WingTip Bikes BV,PROD-5521,Industrial Sensor X200,Hardware,20,249.99,4999.80,EUR,Completed,EMEA,REP-029,Lars van der Berg
+ORD-2024-00014,2024-01-22,CUST-8841,Datum Corp Asia,PROD-3310,Cloud Gateway Pro,Software,8,1200.00,9600.00,USD,Completed,APAC,REP-052,Yuki Tanaka
+ORD-2024-00015,2024-01-23,CUST-0122,Tailspin Toys Corp,PROD-7712,Analytics Dashboard License,Software,15,89.00,1335.00,USD,Completed,AMER,REP-044,Robert Kim

@@ -1,0 +1,203 @@
+name: Deploy — Development
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      force_full_refresh:
+        description: 'Force full refresh of all tables (true/false)'
+        required: false
+        default: 'false'
+
+env:
+  ENVIRONMENT:       dev
+  RESOURCE_GROUP:    rg-contoso-fabric-dev
+  FABRIC_WORKSPACE:  contoso-fabric-dev
+  PYTHON_VERSION:    "3.11"
+
+jobs:
+  deploy-infra:
+    name: Deploy Azure Infrastructure
+    runs-on: ubuntu-latest
+    environment: development
+    permissions:
+      id-token: write   # OIDC login
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Bicep template
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ env.RESOURCE_GROUP }}
+          template:          infra/bicep/main.bicep
+          parameters:        infra/bicep/parameters/dev.parameters.json
+          deploymentName:    deploy-${{ github.run_id }}
+          failOnStdErr:      true
+
+      - name: Output deployment summary
+        run: |
+          az deployment group show \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name deploy-${{ github.run_id }} \
+            --query properties.outputs
+
+  deploy-sql:
+    name: Deploy SQL Schema Changes
+    runs-on: ubuntu-latest
+    needs: deploy-infra
+    environment: development
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install sqlcmd
+        run: |
+          curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor > /etc/apt/trusted.gpg.d/microsoft.gpg
+          sudo add-apt-repository "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -rs)-prod $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install -y mssql-tools18
+
+      - name: Run DDL migrations
+        env:
+          SQL_SERVER: ${{ secrets.DEV_SQL_SERVER }}
+          SQL_DB:     ${{ secrets.DEV_SQL_DATABASE }}
+        run: |
+          TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
+          for script in sql/ddl/*.sql; do
+            echo "Executing $script..."
+            /opt/mssql-tools18/bin/sqlcmd \
+              -S "$SQL_SERVER" \
+              -d "$SQL_DB" \
+              -G \
+              -P "$TOKEN" \
+              -i "$script" \
+              -b
+          done
+
+      - name: Deploy views and procedures
+        env:
+          SQL_SERVER: ${{ secrets.DEV_SQL_SERVER }}
+          SQL_DB:     ${{ secrets.DEV_SQL_DATABASE }}
+        run: |
+          TOKEN=$(az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv)
+          for script in sql/views/*.sql sql/procedures/*.sql; do
+            echo "Executing $script..."
+            /opt/mssql-tools18/bin/sqlcmd \
+              -S "$SQL_SERVER" \
+              -d "$SQL_DB" \
+              -G \
+              -P "$TOKEN" \
+              -i "$script" \
+              -b
+          done
+
+  deploy-fabric-items:
+    name: Deploy Fabric Items (Pipelines & Notebooks)
+    runs-on: ubuntu-latest
+    needs: deploy-sql
+    environment: development
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[deploy]"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Fabric pipelines
+        env:
+          FABRIC_WORKSPACE_ID: ${{ secrets.DEV_FABRIC_WORKSPACE_ID }}
+          AZURE_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          python scripts/deploy_fabric_items.py \
+            --workspace-id "$FABRIC_WORKSPACE_ID" \
+            --item-type DataPipeline \
+            --items-dir fabric/pipelines/
+
+      - name: Deploy Fabric notebooks
+        env:
+          FABRIC_WORKSPACE_ID: ${{ secrets.DEV_FABRIC_WORKSPACE_ID }}
+          AZURE_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          python scripts/deploy_fabric_items.py \
+            --workspace-id "$FABRIC_WORKSPACE_ID" \
+            --item-type Notebook \
+            --items-dir fabric/notebooks/
+
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: deploy-fabric-items
+    environment: development
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run integration smoke tests
+        env:
+          FABRIC_WORKSPACE_ID:  ${{ secrets.DEV_FABRIC_WORKSPACE_ID }}
+          FABRIC_LAKEHOUSE_ID:  ${{ secrets.DEV_FABRIC_LAKEHOUSE_ID }}
+          AZURE_CLIENT_ID:      ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID:      ${{ secrets.AZURE_TENANT_ID }}
+          RUN_INTEGRATION_TESTS: "true"
+        run: |
+          pytest tests/integration/ \
+            --tb=short \
+            -v \
+            --timeout=120

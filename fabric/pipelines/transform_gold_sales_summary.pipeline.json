@@ -1,0 +1,123 @@
+{
+  "$schema": "https://developer.microsoft.com/fabric/schemas/pipeline/1.0",
+  "name": "transform_gold_sales_summary",
+  "description": "Transforms Silver sales data into Gold aggregates in the Fabric Warehouse. Runs daily after silver transform completes.",
+  "type": "MicrosoftFabricPipeline",
+  "version": "1.0",
+  "properties": {
+    "tags": {
+      "layer": "gold",
+      "domain": "sales",
+      "team": "data-engineering",
+      "criticality": "high"
+    }
+  },
+  "parameters": {
+    "processing_date": {
+      "type": "string",
+      "defaultValue": "@formatDateTime(subtractFromTime(utcNow(), 1, 'Day'), 'yyyy-MM-dd')",
+      "description": "Date to process (defaults to yesterday)."
+    },
+    "full_refresh": {
+      "type": "bool",
+      "defaultValue": false,
+      "description": "If true, truncate and rebuild all gold tables."
+    }
+  },
+  "activities": [
+    {
+      "name": "CheckSilverReady",
+      "type": "Lookup",
+      "description": "Wait for silver pipeline to complete before proceeding.",
+      "dependsOn": [],
+      "typeProperties": {
+        "source": {
+          "type": "AzureSqlSource",
+          "sqlReaderQuery": "@concat('SELECT COUNT(*) AS cnt FROM dbo.pipeline_control WHERE pipeline_name = ''transform_silver_sales'' AND CAST(run_date AS DATE) = ''', pipeline().parameters.processing_date, ''' AND status = ''SUCCESS''')"
+        },
+        "linkedServiceName": { "referenceName": "ls_azure_sql_control_db", "type": "LinkedServiceReference" },
+        "firstRowOnly": true
+      }
+    },
+    {
+      "name": "IfSilverReady",
+      "type": "IfCondition",
+      "dependsOn": [{ "activity": "CheckSilverReady", "dependencyConditions": ["Succeeded"] }],
+      "typeProperties": {
+        "expression": { "value": "@equals(activity('CheckSilverReady').output.firstRow.cnt, 1)", "type": "Expression" },
+        "ifTrueActivities": [
+          {
+            "name": "BuildDimCustomer",
+            "type": "SynapseNotebook",
+            "typeProperties": {
+              "notebook": { "referenceName": "nb_build_dim_customer", "type": "NotebookReference" },
+              "parameters": {
+                "processing_date": { "value": "@pipeline().parameters.processing_date", "type": "string" },
+                "full_refresh":    { "value": "@pipeline().parameters.full_refresh",    "type": "bool" }
+              }
+            }
+          },
+          {
+            "name": "BuildDimProduct",
+            "type": "SynapseNotebook",
+            "dependsOn": [],
+            "typeProperties": {
+              "notebook": { "referenceName": "nb_build_dim_product", "type": "NotebookReference" },
+              "parameters": {
+                "processing_date": { "value": "@pipeline().parameters.processing_date", "type": "string" },
+                "full_refresh":    { "value": "@pipeline().parameters.full_refresh",    "type": "bool" }
+              }
+            }
+          },
+          {
+            "name": "BuildFactSalesOrders",
+            "type": "SynapseNotebook",
+            "dependsOn": [
+              { "activity": "BuildDimCustomer", "dependencyConditions": ["Succeeded"] },
+              { "activity": "BuildDimProduct",  "dependencyConditions": ["Succeeded"] }
+            ],
+            "typeProperties": {
+              "notebook": { "referenceName": "nb_build_fact_sales_orders", "type": "NotebookReference" },
+              "parameters": {
+                "processing_date": { "value": "@pipeline().parameters.processing_date", "type": "string" }
+              }
+            }
+          },
+          {
+            "name": "BuildAggSalesSummary",
+            "type": "Script",
+            "dependsOn": [{ "activity": "BuildFactSalesOrders", "dependencyConditions": ["Succeeded"] }],
+            "typeProperties": {
+              "scripts": [
+                {
+                  "text": "@concat('EXEC fact.usp_refresh_sales_summary @processing_date = ''', pipeline().parameters.processing_date, ''';')",
+                  "type": "Query"
+                }
+              ],
+              "linkedServiceName": { "referenceName": "ls_fabric_warehouse", "type": "LinkedServiceReference" }
+            }
+          }
+        ],
+        "ifFalseActivities": [
+          {
+            "name": "FailIfSilverNotReady",
+            "type": "Fail",
+            "typeProperties": {
+              "message": "@concat('Silver pipeline has not completed for processing_date=', pipeline().parameters.processing_date, '. Aborting gold transform.')",
+              "errorCode": "SILVER_NOT_READY"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "schedule": {
+    "type": "ScheduleTrigger",
+    "recurrence": {
+      "frequency": "Day",
+      "interval": 1,
+      "startTime": "2024-01-01T06:00:00Z",
+      "timeZone": "UTC"
+    }
+  }
+}

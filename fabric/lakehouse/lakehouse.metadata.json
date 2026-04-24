@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developer.microsoft.com/fabric/schemas/lakehouse/1.0",
+  "type": "Lakehouse",
+  "displayName": "contoso_analytics_lakehouse",
+  "description": "Primary lakehouse for Contoso data platform — holds Bronze and Silver layers of the Medallion architecture.",
+  "defaultSchema": "dbo",
+  "enableSchemas": true,
+  "oneLakeStoragePath": "abfss://contoso-analytics-lakehouse@onelake.dfs.fabric.microsoft.com/",
+  "managedPrivateEndpoint": true,
+  "sparkSettings": {
+    "defaultSparkPoolId": "contoso-spark-pool-medium",
+    "sparkVersion": "3.4",
+    "autoPause": {
+      "enabled": true,
+      "delayInMinutes": 15
+    }
+  },
+  "tableProperties": {
+    "format": "delta",
+    "deltaProperties": {
+      "autoOptimize": true,
+      "autoCompact": true,
+      "optimizeWrite": true
+    }
+  },
+  "workspaceId": "00000000-0000-0000-0000-000000000001",
+  "itemId": "00000000-0000-0000-0000-000000000002",
+  "createdBy": "data-engineering@contoso.example",
+  "createdDate": "2023-09-01T00:00:00Z"
+}
